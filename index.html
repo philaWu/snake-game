@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贪吃蛇</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #1a1a2e;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+.game-container {
+  text-align: center;
+}
+canvas {
+  border: 2px solid #e94560;
+  background: #16213e;
+  display: block;
+  margin: 0 auto;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #eee;
+}
+.score {
+  font-size: 22px;
+  font-weight: bold;
+  color: #e94560;
+}
+.best {
+  font-size: 16px;
+  color: #aaa;
+}
+button {
+  padding: 10px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  background: #e94560;
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+button:hover { background: #c73650; }
+.controls {
+  color: #666;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.mobile-controls {
+  display: none;
+  margin-top: 16px;
+}
+.mobile-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mobile-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: #0f3460;
+  color: #e94560;
+  border: 2px solid #e94560;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mobile-btn:active { background: #e94560; color: #fff; }
+@media (max-width: 600px) {
+  .mobile-controls { display: block; }
+}
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <div class="header">
+    <div class="score">分数: <span id="score">0</span></div>
+    <div class="best">最高: <span id="best">0</span></div>
+    <button id="restart">重新开始</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div class="controls">方向键 / WASD 控制移动 · 空格暂停</div>
+  <div class="mobile-controls" id="mobile">
+    <div class="mobile-row">
+      <div></div>
+      <div class="mobile-btn" data-dir="up">&#9650;</div>
+      <div></div>
+    </div>
+    <div class="mobile-row">
+      <div class="mobile-btn" data-dir="left">&#9664;</div>
+      <div class="mobile-btn" data-dir="down">&#9660;</div>
+      <div class="mobile-btn" data-dir="right">&#9654;</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const restartBtn = document.getElementById('restart');
+
+const GRID = 20;
+const COLS = 20;
+const ROWS = 20;
+canvas.width = COLS * GRID;
+canvas.height = ROWS * GRID;
+
+let snake, food, direction, nextDirection, score, best, gameOver, paused, gameLoop;
+
+best = parseInt(localStorage.getItem('snakeBest') || '0');
+bestEl.textContent = best;
+
+function init() {
+  const midX = Math.floor(COLS / 2);
+  const midY = Math.floor(ROWS / 2);
+  snake = [
+    { x: midX, y: midY },
+    { x: midX - 1, y: midY },
+    { x: midX - 2, y: midY },
+  ];
+  direction = 'right';
+  nextDirection = 'right';
+  score = 0;
+  gameOver = false;
+  paused = false;
+  scoreEl.textContent = '0';
+  spawnFood();
+  if (gameLoop) clearInterval(gameLoop);
+  gameLoop = setInterval(update, 120);
+}
+
+function spawnFood() {
+  const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
+  const free = [];
+  for (let x = 0; x < COLS; x++) {
+    for (let y = 0; y < ROWS; y++) {
+      if (!occupied.has(`${x},${y}`)) free.push({ x, y });
+    }
+  }
+  if (free.length === 0) return;
+  food = free[Math.floor(Math.random() * free.length)];
+}
+
+function update() {
+  if (gameOver || paused) return;
+
+  direction = nextDirection;
+
+  const head = { ...snake[0] };
+  switch (direction) {
+    case 'up': head.y--; break;
+    case 'down': head.y++; break;
+    case 'left': head.x--; break;
+    case 'right': head.x++; break;
+  }
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+    return endGame();
+  }
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    return endGame();
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score += 10;
+    scoreEl.textContent = score;
+    spawnFood();
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function endGame() {
+  gameOver = true;
+  clearInterval(gameLoop);
+  if (score > best) {
+    best = score;
+    localStorage.setItem('snakeBest', best);
+    bestEl.textContent = best;
+  }
+  draw();
+  drawGameOver();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= COLS; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * GRID, 0);
+    ctx.lineTo(x * GRID, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= ROWS; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * GRID);
+    ctx.lineTo(canvas.width, y * GRID);
+    ctx.stroke();
+  }
+
+  // Snake
+  snake.forEach((seg, i) => {
+    const grad = ctx.createLinearGradient(seg.x * GRID, seg.y * GRID, (seg.x + 1) * GRID, (seg.y + 1) * GRID);
+    if (i === 0) {
+      grad.addColorStop(0, '#00ff88');
+      grad.addColorStop(1, '#00cc66');
+    } else {
+      const alpha = 1 - i / (snake.length + 8);
+      grad.addColorStop(0, `rgba(0,255,136,${alpha})`);
+      grad.addColorStop(1, `rgba(0,180,90,${alpha})`);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(seg.x * GRID + 1, seg.y * GRID + 1, GRID - 2, GRID - 2);
+  });
+
+  // Food
+  const fx = food.x * GRID + GRID / 2;
+  const fy = food.y * GRID + GRID / 2;
+  ctx.fillStyle = '#e94560';
+  ctx.beginPath();
+  ctx.arc(fx, fy, GRID / 2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ff6b81';
+  ctx.beginPath();
+  ctx.arc(fx - 2, fy - 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#e94560';
+  ctx.font = 'bold 28px "Segoe UI", Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('游戏结束', canvas.width / 2, canvas.height / 2 - 10);
+  ctx.fillStyle = '#ccc';
+  ctx.font = '16px "Segoe UI", Arial';
+  ctx.fillText('点击 "重新开始" 再来一局', canvas.width / 2, canvas.height / 2 + 30);
+}
+
+// Controls
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!gameOver) {
+      paused = !paused;
+      if (!paused) draw();
+    }
+    return;
+  }
+  if (gameOver || paused) return;
+  switch (e.key) {
+    case 'ArrowUp': case 'w': case 'W':
+      e.preventDefault();
+      if (direction !== 'down') nextDirection = 'up';
+      break;
+    case 'ArrowDown': case 's': case 'S':
+      e.preventDefault();
+      if (direction !== 'up') nextDirection = 'down';
+      break;
+    case 'ArrowLeft': case 'a': case 'A':
+      e.preventDefault();
+      if (direction !== 'right') nextDirection = 'left';
+      break;
+    case 'ArrowRight': case 'd': case 'D':
+      e.preventDefault();
+      if (direction !== 'left') nextDirection = 'right';
+      break;
+  }
+});
+
+document.getElementById('mobile').addEventListener('click', (e) => {
+  const btn = e.target.closest('.mobile-btn');
+  if (!btn || gameOver) return;
+  const dir = btn.dataset.dir;
+  const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
+  if (direction !== opposites[dir]) nextDirection = dir;
+});
+
+restartBtn.addEventListener('click', init);
+
+init();
+</script>
+
+</body>
+</html>
