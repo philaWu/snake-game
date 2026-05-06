@@ -51,6 +51,26 @@ button {
   transition: background 0.2s;
 }
 button:hover { background: #c73650; }
+.speed-btns {
+  display: flex;
+  gap: 6px;
+}
+.speed-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.speed-btn:hover { border-color: #e94560; color: #e94560; }
+.speed-btn.active {
+  background: #e94560;
+  color: #fff;
+  border-color: #e94560;
+}
 .controls {
   color: #666;
   margin-top: 12px;
@@ -95,8 +115,13 @@ button:hover { background: #c73650; }
     <div class="best">最高: <span id="best">0</span></div>
     <button id="restart">重新开始</button>
   </div>
+  <div class="speed-btns">
+    <button class="speed-btn" data-speed="180">慢速</button>
+    <button class="speed-btn active" data-speed="120">正常</button>
+    <button class="speed-btn" data-speed="70">快速</button>
+  </div>
   <canvas id="canvas"></canvas>
-  <div class="controls">方向键 / WASD 控制移动 · 空格暂停</div>
+  <div class="controls">方向键 / WASD 移动 · 空格暂停 · 1/2/3 切换速度</div>
   <div class="mobile-controls" id="mobile">
     <div class="mobile-row">
       <div></div>
@@ -125,6 +150,7 @@ canvas.width = COLS * GRID;
 canvas.height = ROWS * GRID;
 
 let snake, food, direction, nextDirection, score, best, gameOver, paused, gameLoop;
+let speed = parseInt(localStorage.getItem('snakeSpeed') || '120');
 
 best = parseInt(localStorage.getItem('snakeBest') || '0');
 bestEl.textContent = best;
@@ -145,7 +171,7 @@ function init() {
   scoreEl.textContent = '0';
   spawnFood();
   if (gameLoop) clearInterval(gameLoop);
-  gameLoop = setInterval(update, 120);
+  gameLoop = setInterval(update, speed);
 }
 
 function spawnFood() {
@@ -274,6 +300,9 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
+  if (e.key === '1') { setSpeed(180); return; }
+  if (e.key === '2') { setSpeed(120); return; }
+  if (e.key === '3') { setSpeed(70); return; }
   if (gameOver || paused) return;
   switch (e.key) {
     case 'ArrowUp': case 'w': case 'W':
@@ -303,7 +332,28 @@ document.getElementById('mobile').addEventListener('click', (e) => {
   if (direction !== opposites[dir]) nextDirection = dir;
 });
 
+function setSpeed(newSpeed) {
+  speed = newSpeed;
+  localStorage.setItem('snakeSpeed', speed);
+  document.querySelectorAll('.speed-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.speed) === speed);
+  });
+  if (!gameOver && !paused) {
+    clearInterval(gameLoop);
+    gameLoop = setInterval(update, speed);
+  }
+}
+
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', () => setSpeed(parseInt(btn.dataset.speed)));
+});
+
 restartBtn.addEventListener('click', init);
+
+// Initialize speed button active state
+document.querySelectorAll('.speed-btn').forEach(b => {
+  b.classList.toggle('active', parseInt(b.dataset.speed) === speed);
+});
 
 init();
 </script>
